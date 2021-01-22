@@ -7,7 +7,7 @@ public class Device {
 	 */
 	public native int OpenComPort(int port,byte[]comAddr,byte baud,int[]PortHandle);
     public native int CloseSpecComPort(int PortHandle);
-    public native int OpenNetPort(int Port,String IPaddr,byte[]comAddr,int[] PortHandle);
+    public native   int OpenNetPort(int Port,String IPaddr,byte[]comAddr,int[] PortHandle);
     public native int CloseNetPort(int PortHandle);
     public native int GetReaderInformation(byte[]comAddr,byte[]versionInfo,byte[]readerType,byte[]trType,byte[]dmaxfre,
     									   byte[]dminfre,byte[]powerdBm,byte[]InventoryScanTime,byte[]Ant,byte[]BeepEn,

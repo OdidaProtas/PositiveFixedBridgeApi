@@ -1,13 +1,36 @@
 package uhf;
 
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.jni.Socket;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.messaging.converter.SimpleMessageConverter;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.socket.config.annotation.StompWebSocketEndpointRegistration;
 
+
+import javax.websocket.SendHandler;
+import javax.websocket.SendResult;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Handler;
 
 
+@Controller
 @RestController
+@Slf4j
+@CrossOrigin("*")
+@EnableWebMvc
 public class APIcontroller {
     public static int connectionstatus = 1;
     public static int Port;
@@ -18,154 +41,158 @@ public class APIcontroller {
 
     public static List<String> Tags = new ArrayList<String>();
 
+    public static int netPort = 27011;
+    public static String netIpAddr = "192.168.0.250";
 
-    @RequestMapping("/")
-    public String index() {
-        return "The applications is set up!";
-    }
+    public static boolean isRunning = false;
+    public static boolean isStarted = false;
+    public static boolean scannerReady = false;
 
-//    @RequestMapping("/connect-reader")
-//    public String connectReader() {
-//        Port = 1;
-//        comAddr[0] = (byte) 255;
-//        byte baud = 5;
-//        int[] PortHandle = new int[1];
-//        try {
-//            int result = MainApp.reader.OpenComPort(7, comAddr, baud, PortHandle);
-//            if (result == 0) {
-//                connectionstatus = 0;
-//                return "The reader has been connected successfully with code" + result;
-//            } else {
-//                connectionstatus = result;
-//                return "An error occurred. Unplug the device and try again";
-//            }
-//        } catch (Exception e) {
-//            return e.toString();
-//        }
-//    }
-
-    @RequestMapping("/scan")
-    public String getReaderInfo() {
-        byte baud = 5;
-//        int result = MainApp.reader.OpenComPort(7, comAddr, baud, PortHandle);
-        if (connectionstatus == 0)
-            MainApp.reader.CloseSpecComPort(PortHandle[0]);
-
-        int result2 = MainApp.reader.OpenComPort(7, comAddr, baud, PortHandle);
-        Tags.clear();
-        connectionstatus = 0;
-        if (result2 == 0) {
-            byte QValue = 4;
-            byte Session = 0;
-            byte MaskMem = 2;
-            byte[] MaskAdr = new byte[2];
-            byte MaskLen = 0;
-            byte[] MaskData = new byte[256];
-            byte MaskFlag = 0;
-            byte AdrTID = 0;
-            byte LenTID = 6;
-            byte TIDFlag = 1;//¶ÁTIDµÄÇ°6¸ö×Ö
-            byte Target = 0;
-            byte InAnt = (byte) 0x80;
-            byte Scantime = 10;
-            byte FastFlag = 0;
-            byte[] pEPCList = new byte[20000];
-            int[] Totallen = new int[1];
-            int[] CardNum = new int[1];
-            result2 = MainApp.reader.Inventory_G2(comAddr, QValue, Session, MaskMem, MaskAdr, MaskLen, MaskData, MaskFlag,
-                    AdrTID, LenTID, TIDFlag, Target, InAnt, Scantime, FastFlag, pEPCList, Ant, Totallen,
-                    CardNum, PortHandle[0]);
-            if (CardNum[0] > 0) {
-                int m = 0;
-                for (int index = 0; index < CardNum[0]; index++) {
-                    int epclen = pEPCList[m++] & 255;
-                    String EPCstr = "";
-                    byte[] epc = new byte[epclen];
-                    for (int n = 0; n < epclen; n++) {
-                        byte bbt = pEPCList[m++];
-                        epc[n] = bbt;
-                        String hex = Integer.toHexString(bbt & 255);
-                        if (hex.length() == 1) {
-                            hex = "0" + hex;
-                        }
-                        EPCstr += hex;
-                    }
-                    int rssi = pEPCList[m++];
-                    //¸ù¾ÝTIDºÅÐ´Êý¾Ý
-                    byte ENum = (byte) 255;//ÑÚÂë
-                    byte Mem = 1;//¶ÁEPC
-                    byte WordPtr = 2;//´ÓµÚ2×Ö¿ªÊ¼
-                    byte Num = 6;//¶Á6¸ö×Ö
-                    byte[] Password = new byte[4];
-                    MaskMem = 2;//TIDÑÚÂë
-                    MaskAdr[0] = 0;
-                    MaskAdr[1] = 0;
-                    MaskLen = 96;
-                    int p = 0;
-                    System.arraycopy(epc, 0, MaskData, 0, 96 / 8);
-                    byte[] Data = new byte[Num * 2];
-                    int[] Errorcode = new int[1];
-                    byte WNum = 7;
-                    byte[] Wdt = new byte[WNum * 2];
-                    Wdt[0] = 0x30;
-                    Wdt[1] = 0x00;//µÚÒ»¸ö×ÖPC³¤¶È
-                    Wdt[2] = (byte) 0xE2;
-                    Wdt[3] = 0x00;
-                    Wdt[4] = 0x12;
-                    Wdt[5] = 0x34;
-                    Wdt[6] = 0x56;
-                    Wdt[7] = 0x78;
-                    Wdt[8] = 0x12;
-                    Wdt[9] = 0x34;
-                    Wdt[10] = 0x56;
-                    Wdt[11] = 0x78;
-                    Wdt[12] = 0x12;
-                    Wdt[13] = 0x34;
-                    WordPtr = 1;
-                    result2 = MainApp.reader.WriteData_G2(comAddr, epc, WNum, ENum, Mem, WordPtr, Wdt, Password,
-                            MaskMem, MaskAdr, MaskLen, MaskData, Errorcode, PortHandle[0]);
-                    System.out.println("Write Data Result " + result2);
-                    WordPtr = 2;
-                    result2 = MainApp.reader.ReadData_G2(comAddr, epc, ENum, Mem, WordPtr, Num, Password,
-                            MaskMem, MaskAdr, MaskLen, MaskData, Data, Errorcode, PortHandle[0]);
-                    System.out.println("Read Data G2 " + result2);
-                    if (result2 == 0) {
-                        String Memdata = "";
-                        for (p = 0; p < Num * 2; p++) {
-                            byte bbt = Data[p];
-                            String hex = Integer.toHexString(bbt & 255);
-                            if (hex.length() == 1) {
-                                hex = "0" + hex;
-                            }
-                            Memdata += hex;
-                        }
-                        System.out.println(Memdata + " mem \n");
-                        Tags.add(Memdata);
-                    }
-                }
-            }
-            return Tags.toString();
-        } else {
-            return "An error occured";
+    @RequestMapping("/stop-inventory")
+    public static String stopInventory() {
+        MainApp.reader.CloseSpecComPort(PortHandle[0]);
+        isRunning = false;
+        try {
+            Thread.sleep(100);
+        } catch (Exception e) {
+            return e.toString();
         }
+        return Tags.toString();
     }
-}
-//    @RequestMapping("/get-tags")
-//    public String getTags() {
-//        if (MainApp.result == 0) {
-//            System.out.println(MainApp.Tags);
-//            return MainApp.Tags.toString();
-//        } else {
-//            return "No Tags Available";
-//        }
-//    }
-//
-//    @RequestMapping("/start-scanning")
-//    public String startScanning() {
-//        return "Scanning";
-//    }
 
-//}
+
+    public void greeting() {
+
+    }
+
+    public static SseEmitter sseEmitter;
+
+
+    @Autowired
+    public static EmitterService emitterService = new EmitterService();
+
+
+    @GetMapping("/subscribe")
+    public SseEmitter subscribe() {
+        log.info("subscribing...");
+        sseEmitter = new SseEmitter(24 * 60 * 60 * 1000l);
+        emitterService.addEmitter(sseEmitter);
+        log.info("subscribed...");
+        return sseEmitter;
+    }
+
+
+    @RequestMapping("/start-inventory")
+    public static String startInventory() {
+//        SocketHandler handler = new SocketHandler().handleTextMessage(1, "This is it");
+
+        if (scannerReady) {
+            Tags.clear();
+        } else {
+            new Thread(inventoryTask).start();
+        }
+        isRunning = true;
+        return "Inventory has been started!...";
+    }
+
+    public static Runnable inventoryTask = new Runnable() {
+        @Override
+        public void run() {
+            int result = 1000;
+            byte beep = 0x0;
+            byte baud =5;
+            try {
+                MainApp.reader.SetBeepNotification(comAddr, beep, PortHandle[0]);
+//                result = MainApp.reader.OpenNetPort(netPort, netIpAddr, comAddr, PortHandle);
+                result = MainApp.reader.OpenComPort(3, comAddr, baud, PortHandle);
+
+            } catch (Exception e) {
+                System.out.println(e.toString());
+            }
+            try {
+                if (result == 0) {
+                    isStarted = true;
+                    scannerReady = true;
+                    byte[] versionInfo = new byte[2];
+                    byte[] readerType = new byte[1];
+                    byte[] trType = new byte[1];
+                    byte[] dmaxfre = new byte[1];
+                    byte[] dminfre = new byte[1];
+                    byte[] powerdBm = new byte[1];
+                    byte[] InventoryScanTime = new byte[1];
+                    byte[] Ant = new byte[1];
+                    byte[] BeepEn = new byte[1];
+                    byte[] OutputRep = new byte[1];
+                    byte[] CheckAnt = new byte[1];
+                    result = MainApp.reader.GetReaderInformation(comAddr, versionInfo, readerType, trType, dmaxfre, dminfre, powerdBm, InventoryScanTime,
+                            Ant, BeepEn, OutputRep, CheckAnt, PortHandle[0]);
+                    byte ComAdrData = 0;
+                    result = MainApp.reader.SetAddress(comAddr, ComAdrData, PortHandle[0]);
+                    byte QValue = 4;
+                    byte Session = 0;
+                    byte MaskMem = 2;
+                    byte[] MaskAdr = new byte[2];
+                    byte MaskLen = 0;
+                    byte[] MaskData = new byte[256];
+                    byte MaskFlag = 0;
+                    byte AdrTID = 0;
+                    byte LenTID = 6;
+                    byte TIDFlag = 1;//��TID��ǰ6����
+                    byte Target = 0;
+                    byte InAnt = (byte) 0x80;
+                    byte Scantime = 0;
+                    byte FastFlag = 0;
+                    byte[] pEPCList = new byte[20000];
+                    int[] Totallen = new int[1];
+                    int[] CardNum = new int[1];
+
+                    while (isRunning) {
+                        result = MainApp.reader.Inventory_G2(comAddr, QValue, Session, MaskMem, MaskAdr, MaskLen, MaskData, MaskFlag,
+                                AdrTID, LenTID, TIDFlag, Target, InAnt, Scantime, FastFlag, pEPCList, Ant, Totallen,
+                                CardNum, PortHandle[0]);
+                        if (CardNum[0] > 0) {
+                            int m = 0;
+                            for (int index = 0; index < CardNum[0]; index++) {
+                                int epclen = pEPCList[m++] & 255;
+                                String EPCstr = "";
+                                byte[] epc = new byte[epclen];
+                                for (int n = 0; n < epclen; n++) {
+                                    byte bbt = pEPCList[m++];
+                                    epc[n] = bbt;
+                                    String hex = Integer.toHexString(bbt & 255);
+                                    if (hex.length() == 1) {
+                                        hex = "0" + hex;
+                                    }
+                                    EPCstr += hex;
+                                }
+                                int rssi = pEPCList[m++];
+                                String myEpc = EPCstr.toString();
+//                                emitterService.pushNotification(myEpc);
+                                sseEmitter.send(myEpc);
+                                if (Tags.contains(myEpc)) {
+                                    System.out.println(myEpc);
+                                } else {
+                                    try {
+                                        emitterService.pushNotification(myEpc);
+                                    } catch (Exception e) {
+                                        System.out.println("failed");
+                                    }
+                                    Tags.add(myEpc);
+                                }
+                            }
+                        }
+                    }
+
+                }
+            } catch (Exception e) {
+                MainApp.reader.CloseNetPort(PortHandle[0]);
+                e.toString();
+            }
+        }
+    };
+
+}
+
 
 
 
